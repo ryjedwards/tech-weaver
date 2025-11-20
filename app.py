@@ -3,19 +3,19 @@ import google.generativeai as genai
 import os
 
 # --- CONFIGURATION ---
-# This sets up the page title and icon
 st.set_page_config(page_title="The Tech Weaver", page_icon="🧶")
 
-# --- SIDEBAR (For your API Key) ---
-with st.sidebar:
-    st.header("⚙️ Setup")
-    st.write("To wake the Weaver, please enter your Gemini API Key below.")
-    # You can get a key for free at aistudio.google.com
-    api_key = st.text_input("Gemini API Key", type="password")
-    st.info("Don't have a key? [Get one free here](https://aistudio.google.com/app/apikey)")
+# --- KEY MANAGEMENT (The Invisible Security) ---
+# This checks if the key is in the "Secrets" safe. 
+# If not (like when you run it locally), it asks for it.
+if "GOOGLE_API_KEY" in st.secrets:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+else:
+    # Fallback for local testing or if secret is missing
+    with st.sidebar:
+        api_key = st.text_input("Enter Gemini API Key", type="password")
 
 # --- THE AI PERSONA ---
-# This is the "System Instruction" that makes it safe and poetic.
 SYSTEM_PROMPT = """
 You are "The Tech Weaver," a kind, patient, and wise troubleshooter who helps elderly people with technology.
 Your personality:
@@ -30,14 +30,15 @@ Your personality:
 st.title("🧶 The Tech Weaver")
 st.caption("A gentle guide for your technology troubles.")
 
+# Check if we have a key yet
 if not api_key:
-    st.warning("Please enter your API Key in the sidebar to begin.")
+    st.warning("The Weaver is sleeping. (API Key missing in Secrets).")
     st.stop()
 
 # Configure the AI
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash-exp", # Using the fast, latest model
+    model_name="gemini-2.0-flash-exp", 
     system_instruction=SYSTEM_PROMPT
 )
 
@@ -54,23 +55,21 @@ for message in st.session_state.messages:
 
 # User Input
 if prompt := st.chat_input("Describe the problem here..."):
-    # 1. Display user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Generate AI response
     try:
-        # We create a chat session with the history
         chat = model.start_chat(history=[
             {"role": m["role"], "parts": [m["content"]]} 
             for m in st.session_state.messages 
             if m["role"] != "system"
         ])
         
-        response = chat.send_message(prompt)
+        # Add a spinner so they know it's "thinking"
+        with st.spinner("The Weaver is pondering..."):
+            response = chat.send_message(prompt)
         
-        # 3. Display AI response
         with st.chat_message("model"):
             st.markdown(response.text)
         
