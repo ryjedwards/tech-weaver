@@ -13,37 +13,35 @@ else:
     with st.sidebar:
         api_key = st.text_input("Enter Gemini API Key", type="password")
 
-# --- THE AI PERSONA (The Family Friend) ---
+# --- THE AI PERSONA ---
 SYSTEM_PROMPT = """
 You are a helpful, patient family friend who is good with technology. 
 You are helping an older relative fix a tech problem.
 
 TONE GUIDELINES:
-1. EMPATHETIC & VALIDATING: Start by validating their frustration. (e.g., "Oh, I hate when it does that," or "That sounds really annoying, let's see if we can sort it out.")
-2. RESPECTFUL: Never talk down to them. They are intelligent adults, just unfamiliar with this specific device.
-3. COLLABORATIVE: Use "We" language. "Let's try looking at..." instead of "You need to..."
-4. PLAIN ENGLISH: Avoid jargon. If you must use a tech term, explain it naturally like you would in conversation.
-5. CONCISE BUT WARM: Keep answers short (2-3 sentences) so they are easy to follow, but keep the warmth.
-6. SAFETY: If a hardware repair is needed (like opening a computer), gently suggest they ask a relative to come over and help physically.
+1. EMPATHETIC: "That sounds annoying, let's fix it."
+2. RESPECTFUL: Never talk down to them.
+3. SIMPLE: No jargon. Keep it short (2-3 sentences max).
+4. SAFETY: If hardware is broken, tell them to call a relative.
 """
 
 # --- MAIN APP LOGIC ---
 st.title("🤝 Tech Helper")
-st.write("I'm here to help. Tell me what's going on, or tap the microphone to speak.")
+st.write("Tell me what is wrong, and I will say the answer out loud.")
 
 if not api_key:
-    st.warning("I need the API Key to wake up. (Check Streamlit Secrets).")
+    st.warning("Sleeping... (Missing API Key)")
     st.stop()
 
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=SYSTEM_PROMPT)
 
-# --- INPUTS (Hybrid) ---
+# --- INPUTS ---
 col1, col2 = st.columns([4, 1])
 audio_value = st.audio_input("Record your voice")
-text_value = st.chat_input("Or type your problem here...")
+text_value = st.chat_input("Or type here...")
 
-# --- PROCESSING LOGIC ---
+# --- PROCESSING ---
 user_message = None
 is_audio = False
 
@@ -57,25 +55,29 @@ elif text_value:
 if user_message:
     with st.spinner("Thinking..."):
         try:
+            # 1. Get AI Text
             if is_audio:
                 audio_bytes = user_message.read()
                 response = model.generate_content([
-                    "Listen to this problem and help me fix it like a supportive friend.",
+                    "Listen and help like a friend.",
                     {"mime_type": "audio/wav", "data": audio_bytes}
                 ])
             else:
                 response = model.generate_content(user_message)
             
             ai_text = response.text
+            
+            # Show text (optional, but good for reading along)
+            st.markdown(f"**Answer:** {ai_text}")
 
-            # Display Text
-            st.markdown(f"**Response:** {ai_text}")
-
-            # Voice Output
+            # 2. Convert to Speech
             sound_file = BytesIO()
             tts = gTTS(text=ai_text, lang='en', slow=False)
             tts.write_to_fp(sound_file)
-            st.audio(sound_file, format='audio/mp3', start_time=0)
+            
+            # 3. AUTO-PLAY AUDIO
+            # The 'autoplay=True' flag is the magic switch here
+            st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
 
         except Exception as e:
-            st.error(f"I'm having a little trouble connecting right now. (Error: {e})")
+            st.error(f"Connection error: {e}")
