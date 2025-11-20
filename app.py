@@ -52,14 +52,21 @@ else:
     with st.sidebar:
         api_key = st.text_input("Enter Gemini API Key", type="password")
 
-# --- THE AI PERSONA ---
+# --- THE SMART AI PERSONA ---
 SYSTEM_PROMPT = """
 You are a helpful, patient family friend helping an older relative with tech.
-RULES:
-1. GREETINGS: If user says "Hello", just say "Hello" back.
-2. VALIDATE: Empathize.
-3. CHECKLIST: End with "✅ Steps to Try:".
-4. TONE: Warm, respectful, NO JARGON.
+
+LOGIC TREE:
+1. IF the user says "Hello", "Thanks", or casual chat:
+   - respond naturally and warmly.
+   - DO NOT include a checklist.
+
+2. IF the user describes a PROBLEM (e.g. "It's broken", "How do I..."):
+   - Start with Empathy ("That is frustrating").
+   - Explain the fix in plain English.
+   - END with a section titled "✅ Steps to Try:".
+
+TONE: Warm, respectful, NO JARGON.
 """
 
 # --- MAIN APP LOGIC ---
@@ -87,11 +94,8 @@ if "last_audio" not in st.session_state:
 
 # --- SYNCED TYPEWRITER FUNCTION ---
 def stream_data(text):
-    """Yields text word by word, tuned to the speed of Google TTS"""
     for word in text.split(" "):
         yield word + " "
-        # 0.32 seconds is the magic number for gTTS speaking speed
-        # This makes the text appear at roughly the same pace the voice speaks
         time.sleep(0.32) 
 
 # --- WELCOME MAT ---
@@ -145,8 +149,10 @@ if user_message:
         try:
             if is_audio:
                 audio_bytes = user_message.read()
+                # We updated the prompt logic inside the model config, 
+                # so we can send a simpler prompt here.
                 response = model.generate_content([
-                    "If greeting, return greeting. Else help. End with checklist.",
+                    "Reply kindly based on the system instructions.",
                     {"mime_type": "audio/wav", "data": audio_bytes}
                 ])
             else:
@@ -154,21 +160,19 @@ if user_message:
             
             ai_text = response.text
             
-            # 1. GENERATE AUDIO (But don't play yet)
+            # 1. GENERATE AUDIO
             sound_file = BytesIO()
             tts = gTTS(text=ai_text, lang='en', slow=False)
             tts.write_to_fp(sound_file)
             
-            # 2. START AUDIO PLAYBACK
-            # We render the audio player invisible but active
+            # 2. PLAY AUDIO
             st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
 
-            # 3. START TEXT STREAM (Synced)
-            # The audio starts instantly, and this loop runs alongside it
+            # 3. STREAM TEXT
             with st.chat_message("assistant"):
                 st.write_stream(stream_data(ai_text))
             
-            # 4. SAVE TO LOG
+            # 4. SAVE
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
         except Exception as e:
