@@ -48,3 +48,14 @@ st.markdown("""
 
 # --- KEY MANAGEMENT ---
 if "GOOGLE_API_KEY" in st.secrets:
+    # THIS LINE MUST BE INDENTED 4 SPACES
+    api_key = st.secrets["GOOGLE_API_KEY"]
+else:
+    with st.sidebar:
+        api_key = st.text_input("Enter Gemini API Key", type="password")
+
+# --- THE AI PERSONA ---
+SYSTEM_PROMPT = """
+You are a helpful, patient family friend helping an older relative with tech.
+RULES:
+1. G
