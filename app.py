@@ -26,7 +26,7 @@ else:
 SYSTEM_PROMPT = """
 You are a helpful, patient family friend helping an older relative with tech.
 STRUCTURE:
-1. EMPATHY FIRST: Validate their feelings (e.g., "That is so frustrating").
+1. EMPATHY FIRST: Validate their feelings.
 2. EXPLANATION: Plain English.
 3. THE CHECKLIST: End with a section "✅ Steps to Try:".
 TONE: Warm, respectful, NO JARGON.
@@ -54,18 +54,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # --- WELCOME MAT (Instructions) ---
-# Only show this if the chat history is empty
 if len(st.session_state.messages) == 0:
-    st.markdown("""
-    ### 👋 Hello! I am here to help you.
-    
-    **To get started, you can:**
-    
-    1. **Tap the "Record your voice"** button below and tell me what is wrong.
-    2. **OR Type your problem** in the box at the very bottom.
-    
-    *I will listen to you and speak the answer out loud.*
-    """)
+    st.info("👋 **Hello! I am here to help.** \n\nTap **'Record your voice'** below to speak, or type your problem in the box.")
 
 # Display History
 for message in st.session_state.messages:
@@ -73,8 +63,6 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # --- INPUTS ---
-# We put a little spacing here to separate instructions from inputs
-st.write("---") 
 audio_value = st.audio_input("Record your voice")
 text_value = st.chat_input("Or type here...")
 
@@ -90,31 +78,40 @@ elif text_value:
     is_audio = False
 
 if user_message:
-    # Add user message to log
     if not is_audio:
         st.session_state.messages.append({"role": "user", "content": user_message})
+        with st.chat_message("user"):
+            st.markdown(user_message)
     else:
         st.session_state.messages.append({"role": "user", "content": "🎤 *Voice Message Sent*"})
-    
-    # Force a rerun so the message appears immediately (and Welcome Mat disappears)
-    st.rerun()
+        with st.chat_message("user"):
+            st.markdown("🎤 *Voice Message Sent*")
 
-# --- AI GENERATION (Runs after the rerun) ---
-# We check if the last message was from the user to trigger the AI
-if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            try:
-                # Get the last user input (we have to grab it again since we reran)
-                # Note: For simplicity in this structure, we handle the generation right here
-                
-                # We need to check if the INPUT widgets still hold data, 
-                # but since we reran, they might be empty. 
-                # Let's adjust the flow slightly to handle the rerun correctly.
-                pass # The logic below handles the actual generation better without the rerun complication.
-            except:
-                pass
+    with st.spinner("Thinking..."):
+        try:
+            if is_audio:
+                audio_bytes = user_message.read()
+                response = model.generate_content([
+                    "Listen and help. End with a checklist.",
+                    {"mime_type": "audio/wav", "data": audio_bytes}
+                ])
+            else:
+                response = model.generate_content(user_message)
+            
+            ai_text = response.text
+            
+            st.session_state.messages.append({"role": "assistant", "content": ai_text})
+            with st.chat_message("assistant"):
+                st.markdown(ai_text)
 
-# (Reverting the rerun logic to the simpler stable version to avoid complexity)
-# Let's stick to the previous stable logic but just add the Welcome Mat.
-# The previous code block I gave you was safer. Let's use that logic + Welcome Mat.
+            # AUDIO AUTOPLAY
+            sound_file = BytesIO()
+            tts = gTTS(text=ai_text, lang='en', slow=False)
+            tts.write_to_fp(sound_file)
+            st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
+            
+            # Force rerun to clear the "Welcome Mat" and update inputs
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Connection error: {e}")
