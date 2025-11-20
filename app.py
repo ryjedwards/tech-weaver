@@ -6,30 +6,39 @@ from io import BytesIO
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Tech Helper", page_icon="🤝")
 
-# --- CSS HACKS (The Visual Magic) ---
-# 1. Big Font
-# 2. STICKY AUDIO: This forces the microphone to float at the bottom!
+# --- CSS HACKS (The "Clean UI" Fix) ---
 st.markdown("""
     <style>
-    /* Big Font for readability */
+    /* 1. Big Font for readability */
     div[data-testid="stMarkdownContainer"] p { font-size: 22px !important; line-height: 1.6 !important; }
     div[data-testid="stMarkdownContainer"] li { font-size: 22px !important; margin-bottom: 10px !important; }
     
-    /* Floating Audio Recorder - This moves it to the bottom right */
+    /* 2. CLEANER AUDIO RECORDER */
     div[data-testid="stAudioInput"] {
         position: fixed;
-        bottom: 100px; /* Sits right above the chat bar */
-        z-index: 1000;
+        bottom: 70px; /* Sits exactly on top of the text input */
+        left: 0;
         width: 100%;
-        max-width: 800px; /* Keeps it from getting too wide on desktop */
-        background-color: white;
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #ddd;
+        z-index: 1000;
+        background-color: transparent; /* No more white box */
+        border: none; /* No more border */
+        padding: 0px 20px; /* Align with text box */
     }
-    /* Hide the default label to make it cleaner */
+    
+    /* Remove the default "Drag and drop" text to make it cleaner */
+    div[data-testid="stAudioInput"] > div > div {
+        background-color: transparent !important;
+        border: none !important;
+    }
+    
+    /* Hide the label */
     div[data-testid="stAudioInput"] label {
         display: none;
+    }
+    
+    /* 3. Adjust History to not hide behind the controls */
+    div[data-testid="stVerticalBlock"] {
+        padding-bottom: 150px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -41,27 +50,25 @@ else:
     with st.sidebar:
         api_key = st.text_input("Enter Gemini API Key", type="password")
 
-# --- THE AI PERSONA (Updated to stop hallucinating) ---
+# --- THE AI PERSONA ---
 SYSTEM_PROMPT = """
 You are a helpful, patient family friend helping an older relative with tech.
-
-CRITICAL RULES:
-1. GREETINGS: If the user just says "Hello" or "Hi", JUST SAY HELLO BACK. Ask "What is going on?" DO NOT invent a problem.
-2. BACKGROUND NOISE: If you hear silence or noise but no words, say "I couldn't quite hear you. Can you try again?"
-3. EMPATHY FIRST: If they state a problem, validate their feelings.
-4. THE CHECKLIST: End with a section "✅ Steps to Try:".
-5. TONE: Warm, respectful, NO JARGON.
+RULES:
+1. GREETINGS: If user says "Hello", just say "Hello" back.
+2. VALIDATE: Empathize with their frustration.
+3. CHECKLIST: End with "✅ Steps to Try:".
+4. TONE: Warm, respectful, NO JARGON.
 """
 
 # --- MAIN APP LOGIC ---
 st.title("🤝 Tech Helper")
 
-# --- SIDEBAR CONTROLS ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("Controls")
-    if st.button("🔄 Start Over / Clear Chat"):
+    if st.button("🔄 Start Over"):
         st.session_state.messages = []
-        st.session_state.last_audio = None # Clear audio memory too
+        st.session_state.last_audio = None
         st.rerun()
 
 if not api_key:
@@ -81,28 +88,25 @@ if "last_audio" not in st.session_state:
 welcome_placeholder = st.empty()
 if len(st.session_state.messages) == 0:
     with welcome_placeholder.container():
-        st.info("👋 **Hello!** \n\nTap the **Microphone** at the bottom to speak, or **Type** below.")
+        st.info("👋 **Hello!** \n\nTap the **Microphone** below to speak, or **Type** in the box.")
 
-# --- DISPLAY HISTORY ---
-# We create a container for history so it stays ABOVE the fixed audio button
+# --- HISTORY ---
 history_container = st.container()
 with history_container:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    # Add some empty space at the bottom so the last message isn't hidden by the mic
-    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+    # Spacer
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
 
 # --- INPUTS ---
-# We place these at the bottom of the script, but CSS moves them visually
-audio_value = st.audio_input("Voice Input") # Label hidden by CSS
+audio_value = st.audio_input("Voice Input")
 text_value = st.chat_input("Type here...")
 
 # --- PROCESSING ---
 user_message = None
 is_audio = False
 
-# Logic to prevent looping
 if audio_value and audio_value != st.session_state.last_audio:
     user_message = audio_value
     is_audio = True
@@ -127,9 +131,8 @@ if user_message:
         try:
             if is_audio:
                 audio_bytes = user_message.read()
-                # We updated the prompt here to be stricter about "Just Hello"
                 response = model.generate_content([
-                    "If this is just a greeting, greet back. If it's a problem, help.",
+                    "If greeting, return greeting. Else help. End with checklist.",
                     {"mime_type": "audio/wav", "data": audio_bytes}
                 ])
             else:
