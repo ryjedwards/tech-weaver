@@ -40,6 +40,7 @@ with st.sidebar:
     st.header("Controls")
     if st.button("🔄 Start Over / Clear Chat"):
         st.session_state.messages = []
+        # We can manually clear the audio state here if needed
         st.rerun()
 
 if not api_key:
@@ -52,10 +53,17 @@ model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=
 # --- SESSION STATE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "last_audio" not in st.session_state:
+    st.session_state.last_audio = None
 
-# --- WELCOME MAT (Instructions) ---
+# --- WELCOME MAT (The Placeholder Fix) ---
+# We create an empty container FIRST.
+welcome_placeholder = st.empty()
+
+# If history is empty, put the text INSIDE the container.
 if len(st.session_state.messages) == 0:
-    st.info("👋 **Hello! I am here to help.** \n\nTap **'Record your voice'** below to speak, or type your problem in the box.")
+    with welcome_placeholder.container():
+        st.info("👋 **Hello! I am here to help.** \n\nTap **'Record your voice'** below to speak, or type your problem in the box.")
 
 # Display History
 for message in st.session_state.messages:
@@ -70,14 +78,20 @@ text_value = st.chat_input("Or type here...")
 user_message = None
 is_audio = False
 
-if audio_value:
+# LOGIC: Ensure we don't re-process the same audio file
+if audio_value and audio_value != st.session_state.last_audio:
     user_message = audio_value
     is_audio = True
+    st.session_state.last_audio = audio_value # Mark this audio as "done"
 elif text_value:
     user_message = text_value
     is_audio = False
 
 if user_message:
+    # 1. INSTANTLY clear the welcome message
+    welcome_placeholder.empty()
+
+    # 2. Add user message to log
     if not is_audio:
         st.session_state.messages.append({"role": "user", "content": user_message})
         with st.chat_message("user"):
@@ -87,6 +101,7 @@ if user_message:
         with st.chat_message("user"):
             st.markdown("🎤 *Voice Message Sent*")
 
+    # 3. Generate Answer
     with st.spinner("Thinking..."):
         try:
             if is_audio:
@@ -104,14 +119,13 @@ if user_message:
             with st.chat_message("assistant"):
                 st.markdown(ai_text)
 
-            # AUDIO AUTOPLAY
+            # 4. AUDIO AUTOPLAY
             sound_file = BytesIO()
             tts = gTTS(text=ai_text, lang='en', slow=False)
             tts.write_to_fp(sound_file)
             st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
             
-            # Force rerun to clear the "Welcome Mat" and update inputs
-            st.rerun()
+            # NO RERUN HERE! The loop is dead.
 
         except Exception as e:
             st.error(f"Connection error: {e}")
