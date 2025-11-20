@@ -6,39 +6,39 @@ from io import BytesIO
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Tech Helper", page_icon="🤝")
 
-# --- CSS HACKS (The "Clean UI" Fix) ---
+# --- CSS HACKS (The "Compact Pill" Layout) ---
 st.markdown("""
     <style>
-    /* 1. Big Font for readability */
+    /* 1. Big Font */
     div[data-testid="stMarkdownContainer"] p { font-size: 22px !important; line-height: 1.6 !important; }
     div[data-testid="stMarkdownContainer"] li { font-size: 22px !important; margin-bottom: 10px !important; }
     
-    /* 2. CLEANER AUDIO RECORDER */
+    /* 2. COMPACT FLOATING MIC */
     div[data-testid="stAudioInput"] {
         position: fixed;
-        bottom: 70px; /* Sits exactly on top of the text input */
-        left: 0;
-        width: 100%;
+        bottom: 90px; /* Sits just above the text box */
+        right: 20px;  /* Floats in the bottom right corner */
+        width: 300px; /* Compact width */
         z-index: 1000;
-        background-color: transparent; /* No more white box */
-        border: none; /* No more border */
-        padding: 0px 20px; /* Align with text box */
+        background-color: transparent; 
     }
     
-    /* Remove the default "Drag and drop" text to make it cleaner */
-    div[data-testid="stAudioInput"] > div > div {
-        background-color: transparent !important;
-        border: none !important;
+    /* Style the internal box to look like a "Pill" */
+    div[data-testid="stAudioInput"] > div {
+        border-radius: 25px !important; /* Rounded corners */
+        border: 1px solid #444; /* Subtle border */
+        background-color: #262730; /* Dark grey to match dark mode theme */
+        padding: 5px 10px;
     }
-    
-    /* Hide the label */
+
+    /* Hide the label text "Voice Input" to save space */
     div[data-testid="stAudioInput"] label {
         display: none;
     }
     
-    /* 3. Adjust History to not hide behind the controls */
+    /* 3. Add padding to bottom of page so messages don't get hidden */
     div[data-testid="stVerticalBlock"] {
-        padding-bottom: 150px;
+        padding-bottom: 120px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -55,7 +55,7 @@ SYSTEM_PROMPT = """
 You are a helpful, patient family friend helping an older relative with tech.
 RULES:
 1. GREETINGS: If user says "Hello", just say "Hello" back.
-2. VALIDATE: Empathize with their frustration.
+2. VALIDATE: Empathize.
 3. CHECKLIST: End with "✅ Steps to Try:".
 4. TONE: Warm, respectful, NO JARGON.
 """
@@ -88,7 +88,7 @@ if "last_audio" not in st.session_state:
 welcome_placeholder = st.empty()
 if len(st.session_state.messages) == 0:
     with welcome_placeholder.container():
-        st.info("👋 **Hello!** \n\nTap the **Microphone** below to speak, or **Type** in the box.")
+        st.info("👋 **Hello!** \n\nTo speak, tap the **Microphone** floating in the bottom corner.")
 
 # --- HISTORY ---
 history_container = st.container()
@@ -96,7 +96,7 @@ with history_container:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    # Spacer
+    # Spacer to ensure the last message isn't covered by the floating controls
     st.markdown("<br><br><br>", unsafe_allow_html=True)
 
 # --- INPUTS ---
