@@ -38,7 +38,7 @@ if not api_key:
 # Configure the AI
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash", 
+    model_name="gemini-1.5-flash-002", 
     system_instruction=SYSTEM_PROMPT
 )
 
