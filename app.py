@@ -2,24 +2,21 @@ import streamlit as st
 import google.generativeai as genai
 from gtts import gTTS
 from io import BytesIO
-import time # Needed for the typewriter effect
+import time
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Tech Helper", page_icon="🤝")
 
-# --- CSS HACKS (Layout & UI) ---
+# --- CSS HACKS ---
 st.markdown("""
     <style>
-    /* 1. HIDE CLUTTER */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* 2. BIG FONT */
     div[data-testid="stMarkdownContainer"] p { font-size: 22px !important; line-height: 1.6 !important; }
     div[data-testid="stMarkdownContainer"] li { font-size: 22px !important; margin-bottom: 10px !important; }
     
-    /* 3. CENTERED FLOATING MIC (Moved UP to prevent overlap) */
     div[data-testid="stAudioInput"] {
         position: fixed;
         bottom: 120px;
@@ -32,7 +29,6 @@ st.markdown("""
         border: none;
     }
     
-    /* Style the pill */
     div[data-testid="stAudioInput"] > div {
         background-color: #262730;
         border-radius: 30px;
@@ -40,11 +36,8 @@ st.markdown("""
         padding: 5px;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.4);
     }
-
-    /* Hide Label */
     div[data-testid="stAudioInput"] label { display: none; }
     
-    /* 4. Adjust vertical padding */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 5rem;
@@ -72,7 +65,6 @@ RULES:
 # --- MAIN APP LOGIC ---
 st.title("🤝 Tech Helper")
 
-# --- SIDEBAR ---
 with st.sidebar:
     st.header("Controls")
     if st.button("🔄 Start Over"):
@@ -93,16 +85,17 @@ if "messages" not in st.session_state:
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# --- TYPEWRITER FUNCTION ---
+# --- SYNCED TYPEWRITER FUNCTION ---
 def stream_data(text):
-    """Yields text word by word for the streaming effect"""
+    """Yields text word by word, tuned to the speed of Google TTS"""
     for word in text.split(" "):
         yield word + " "
-        time.sleep(0.06) # Adjust speed: Higher = Slower typing
+        # 0.32 seconds is the magic number for gTTS speaking speed
+        # This makes the text appear at roughly the same pace the voice speaks
+        time.sleep(0.32) 
 
 # --- WELCOME MAT ---
 welcome_placeholder = st.empty()
-
 if len(st.session_state.messages) == 0:
     with welcome_placeholder.container():
         st.info("""
@@ -114,13 +107,10 @@ if len(st.session_state.messages) == 0:
         """)
 
 # --- HISTORY ---
-# Only show history if there IS history
 if len(st.session_state.messages) > 0:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    
-    # Spacer
     st.markdown("<div style='height: 220px;'></div>", unsafe_allow_html=True)
 
 # --- INPUTS ---
@@ -142,7 +132,6 @@ elif text_value:
 if user_message:
     welcome_placeholder.empty()
 
-    # 1. Show User Message Immediately
     if not is_audio:
         st.session_state.messages.append({"role": "user", "content": user_message})
         with st.chat_message("user"):
@@ -152,7 +141,6 @@ if user_message:
         with st.chat_message("user"):
             st.markdown("🎤 *Voice Message Sent*")
 
-    # 2. Think & Generate
     with st.spinner("Thinking..."):
         try:
             if is_audio:
@@ -166,24 +154,22 @@ if user_message:
             
             ai_text = response.text
             
-            # 3. Generate Audio
+            # 1. GENERATE AUDIO (But don't play yet)
             sound_file = BytesIO()
             tts = gTTS(text=ai_text, lang='en', slow=False)
             tts.write_to_fp(sound_file)
             
-            # 4. RENDER AUDIO PLAYER FIRST (Invisible but Auto-playing)
-            # This puts the audio element on the screen so it starts loading
+            # 2. START AUDIO PLAYBACK
+            # We render the audio player invisible but active
             st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
 
-            # 5. TYPEWRITER EFFECT (Visuals catch up to audio)
+            # 3. START TEXT STREAM (Synced)
+            # The audio starts instantly, and this loop runs alongside it
             with st.chat_message("assistant"):
-                # st.write_stream handles the typing animation automatically
                 st.write_stream(stream_data(ai_text))
             
-            # 6. Save to history
+            # 4. SAVE TO LOG
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
-
-            # NO RERUN - This keeps the audio alive!
 
         except Exception as e:
             st.error(f"Connection error: {e}")
