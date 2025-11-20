@@ -6,14 +6,19 @@ from io import BytesIO
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Tech Helper", page_icon="🤝")
 
-# --- CSS HACKS (The "True Center" Fix) ---
+# --- CSS HACKS (Clean UI & Smart Layout) ---
 st.markdown("""
     <style>
-    /* 1. Big Font */
+    /* 1. HIDE CLUTTER (Streamlit Header & Footer) */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* 2. BIG FONT for readability */
     div[data-testid="stMarkdownContainer"] p { font-size: 22px !important; line-height: 1.6 !important; }
     div[data-testid="stMarkdownContainer"] li { font-size: 22px !important; margin-bottom: 10px !important; }
     
-    /* 2. THE FIX: Centered Floating Audio */
+    /* 3. CENTERED FLOATING MIC (The "Pill") */
     div[data-testid="stAudioInput"] {
         position: fixed;
         bottom: 80px;
@@ -26,20 +31,22 @@ st.markdown("""
         border: none;
     }
     
-    /* Make the internal box look like a pill/button */
+    /* Style the internal pill */
     div[data-testid="stAudioInput"] > div {
         background-color: #262730;
-        border-radius: 20px;
-        border: 1px solid #444;
+        border-radius: 30px;
+        border: 2px solid #555; /* Slightly thicker border for visibility */
         padding: 5px;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.3); /* Shadow to make it pop */
     }
 
     /* Hide Label */
     div[data-testid="stAudioInput"] label { display: none; }
     
-    /* 3. Padding for bottom of chat */
-    div[data-testid="stVerticalBlock"] {
-        padding-bottom: 150px;
+    /* 4. Reduce top white space so Welcome Mat sits higher */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 5rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -85,24 +92,34 @@ if "messages" not in st.session_state:
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# --- WELCOME MAT ---
+# --- WELCOME MAT (Instructional Card) ---
 welcome_placeholder = st.empty()
+
 if len(st.session_state.messages) == 0:
     with welcome_placeholder.container():
-        st.markdown("""
-        <div style="text-align: center; padding-top: 50px;">
-            <h1>👋 Hi there!</h1>
-            <p style="font-size: 24px;">Tap the <b>Microphone</b> below to speak.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        # We use a colored info box to make it look like a card
+        st.info("""
+        ### 👋 **I am listening.**
+        
+        I can help you fix your **Phone**, **TV**, or **Computer**.
+        
+        👇 **Tap the Microphone below and say:**
+        
+        * "My printer isn't working."
+        * "I forgot my password."
+        * "How do I make the text bigger?"
+        """)
 
 # --- HISTORY ---
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Spacer at the bottom
-st.markdown("<div style='height: 200px;'></div>", unsafe_allow_html=True)
+# logic: Only show history if there IS history
+if len(st.session_state.messages) > 0:
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Spacer: ONLY add this if we have messages. 
+    # This prevents the "Scroll on Load" issue.
+    st.markdown("<div style='height: 180px;'></div>", unsafe_allow_html=True)
 
 # --- INPUTS ---
 audio_value = st.audio_input("Voice Input")
@@ -154,6 +171,9 @@ if user_message:
             tts = gTTS(text=ai_text, lang='en', slow=False)
             tts.write_to_fp(sound_file)
             st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
+            
+            # Force rerun to update the layout (add spacer)
+            st.rerun()
 
         except Exception as e:
             st.error(f"Connection error: {e}")
