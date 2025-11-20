@@ -6,12 +6,31 @@ from io import BytesIO
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Tech Helper", page_icon="🤝")
 
-# --- CSS FOR BIG FONT ---
+# --- CSS HACKS (The Visual Magic) ---
+# 1. Big Font
+# 2. STICKY AUDIO: This forces the microphone to float at the bottom!
 st.markdown("""
     <style>
+    /* Big Font for readability */
     div[data-testid="stMarkdownContainer"] p { font-size: 22px !important; line-height: 1.6 !important; }
     div[data-testid="stMarkdownContainer"] li { font-size: 22px !important; margin-bottom: 10px !important; }
-    .stChatInput textarea { font-size: 18px !important; }
+    
+    /* Floating Audio Recorder - This moves it to the bottom right */
+    div[data-testid="stAudioInput"] {
+        position: fixed;
+        bottom: 100px; /* Sits right above the chat bar */
+        z-index: 1000;
+        width: 100%;
+        max-width: 800px; /* Keeps it from getting too wide on desktop */
+        background-color: white;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+    }
+    /* Hide the default label to make it cleaner */
+    div[data-testid="stAudioInput"] label {
+        display: none;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -22,14 +41,16 @@ else:
     with st.sidebar:
         api_key = st.text_input("Enter Gemini API Key", type="password")
 
-# --- THE AI PERSONA ---
+# --- THE AI PERSONA (Updated to stop hallucinating) ---
 SYSTEM_PROMPT = """
 You are a helpful, patient family friend helping an older relative with tech.
-STRUCTURE:
-1. EMPATHY FIRST: Validate their feelings.
-2. EXPLANATION: Plain English.
-3. THE CHECKLIST: End with a section "✅ Steps to Try:".
-TONE: Warm, respectful, NO JARGON.
+
+CRITICAL RULES:
+1. GREETINGS: If the user just says "Hello" or "Hi", JUST SAY HELLO BACK. Ask "What is going on?" DO NOT invent a problem.
+2. BACKGROUND NOISE: If you hear silence or noise but no words, say "I couldn't quite hear you. Can you try again?"
+3. EMPATHY FIRST: If they state a problem, validate their feelings.
+4. THE CHECKLIST: End with a section "✅ Steps to Try:".
+5. TONE: Warm, respectful, NO JARGON.
 """
 
 # --- MAIN APP LOGIC ---
@@ -40,7 +61,7 @@ with st.sidebar:
     st.header("Controls")
     if st.button("🔄 Start Over / Clear Chat"):
         st.session_state.messages = []
-        # We can manually clear the audio state here if needed
+        st.session_state.last_audio = None # Clear audio memory too
         st.rerun()
 
 if not api_key:
@@ -56,42 +77,43 @@ if "messages" not in st.session_state:
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# --- WELCOME MAT (The Placeholder Fix) ---
-# We create an empty container FIRST.
+# --- WELCOME MAT ---
 welcome_placeholder = st.empty()
-
-# If history is empty, put the text INSIDE the container.
 if len(st.session_state.messages) == 0:
     with welcome_placeholder.container():
-        st.info("👋 **Hello! I am here to help.** \n\nTap **'Record your voice'** below to speak, or type your problem in the box.")
+        st.info("👋 **Hello!** \n\nTap the **Microphone** at the bottom to speak, or **Type** below.")
 
-# Display History
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# --- DISPLAY HISTORY ---
+# We create a container for history so it stays ABOVE the fixed audio button
+history_container = st.container()
+with history_container:
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    # Add some empty space at the bottom so the last message isn't hidden by the mic
+    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
 
 # --- INPUTS ---
-audio_value = st.audio_input("Record your voice")
-text_value = st.chat_input("Or type here...")
+# We place these at the bottom of the script, but CSS moves them visually
+audio_value = st.audio_input("Voice Input") # Label hidden by CSS
+text_value = st.chat_input("Type here...")
 
 # --- PROCESSING ---
 user_message = None
 is_audio = False
 
-# LOGIC: Ensure we don't re-process the same audio file
+# Logic to prevent looping
 if audio_value and audio_value != st.session_state.last_audio:
     user_message = audio_value
     is_audio = True
-    st.session_state.last_audio = audio_value # Mark this audio as "done"
+    st.session_state.last_audio = audio_value
 elif text_value:
     user_message = text_value
     is_audio = False
 
 if user_message:
-    # 1. INSTANTLY clear the welcome message
     welcome_placeholder.empty()
 
-    # 2. Add user message to log
     if not is_audio:
         st.session_state.messages.append({"role": "user", "content": user_message})
         with st.chat_message("user"):
@@ -101,13 +123,13 @@ if user_message:
         with st.chat_message("user"):
             st.markdown("🎤 *Voice Message Sent*")
 
-    # 3. Generate Answer
     with st.spinner("Thinking..."):
         try:
             if is_audio:
                 audio_bytes = user_message.read()
+                # We updated the prompt here to be stricter about "Just Hello"
                 response = model.generate_content([
-                    "Listen and help. End with a checklist.",
+                    "If this is just a greeting, greet back. If it's a problem, help.",
                     {"mime_type": "audio/wav", "data": audio_bytes}
                 ])
             else:
@@ -119,13 +141,11 @@ if user_message:
             with st.chat_message("assistant"):
                 st.markdown(ai_text)
 
-            # 4. AUDIO AUTOPLAY
+            # AUDIO AUTOPLAY
             sound_file = BytesIO()
             tts = gTTS(text=ai_text, lang='en', slow=False)
             tts.write_to_fp(sound_file)
             st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
-            
-            # NO RERUN HERE! The loop is dead.
 
         except Exception as e:
             st.error(f"Connection error: {e}")
