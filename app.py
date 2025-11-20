@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+import google.genai as genai
 import os
 
 # --- CONFIGURATION ---
@@ -38,7 +38,7 @@ if not api_key:
 # Configure the AI
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash-002", 
+    model_name="gemini-1.5-flash", 
     system_instruction=SYSTEM_PROMPT
 )
 
