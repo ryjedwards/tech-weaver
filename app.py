@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 from gtts import gTTS
 from io import BytesIO
+import time # Needed for the typewriter effect
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Tech Helper", page_icon="🤝")
@@ -21,7 +22,7 @@ st.markdown("""
     /* 3. CENTERED FLOATING MIC (Moved UP to prevent overlap) */
     div[data-testid="stAudioInput"] {
         position: fixed;
-        bottom: 120px; /* Increased from 80px to 120px so it clears the text box */
+        bottom: 120px;
         left: 50%;
         transform: translateX(-50%);
         width: 90%;
@@ -92,7 +93,14 @@ if "messages" not in st.session_state:
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# --- WELCOME MAT (Friendly Version) ---
+# --- TYPEWRITER FUNCTION ---
+def stream_data(text):
+    """Yields text word by word for the streaming effect"""
+    for word in text.split(" "):
+        yield word + " "
+        time.sleep(0.06) # Adjust speed: Higher = Slower typing
+
+# --- WELCOME MAT ---
 welcome_placeholder = st.empty()
 
 if len(st.session_state.messages) == 0:
@@ -106,12 +114,13 @@ if len(st.session_state.messages) == 0:
         """)
 
 # --- HISTORY ---
+# Only show history if there IS history
 if len(st.session_state.messages) > 0:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # Spacer to prevent hiding behind the floating mic
+    # Spacer
     st.markdown("<div style='height: 220px;'></div>", unsafe_allow_html=True)
 
 # --- INPUTS ---
@@ -133,6 +142,7 @@ elif text_value:
 if user_message:
     welcome_placeholder.empty()
 
+    # 1. Show User Message Immediately
     if not is_audio:
         st.session_state.messages.append({"role": "user", "content": user_message})
         with st.chat_message("user"):
@@ -142,6 +152,7 @@ if user_message:
         with st.chat_message("user"):
             st.markdown("🎤 *Voice Message Sent*")
 
+    # 2. Think & Generate
     with st.spinner("Thinking..."):
         try:
             if is_audio:
@@ -155,18 +166,24 @@ if user_message:
             
             ai_text = response.text
             
-            st.session_state.messages.append({"role": "assistant", "content": ai_text})
-            with st.chat_message("assistant"):
-                st.markdown(ai_text)
-
-            # AUDIO AUTOPLAY
+            # 3. Generate Audio
             sound_file = BytesIO()
             tts = gTTS(text=ai_text, lang='en', slow=False)
             tts.write_to_fp(sound_file)
-            st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
             
-            # Force rerun to clear Welcome Mat and update layout
-            st.rerun()
+            # 4. RENDER AUDIO PLAYER FIRST (Invisible but Auto-playing)
+            # This puts the audio element on the screen so it starts loading
+            st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
+
+            # 5. TYPEWRITER EFFECT (Visuals catch up to audio)
+            with st.chat_message("assistant"):
+                # st.write_stream handles the typing animation automatically
+                st.write_stream(stream_data(ai_text))
+            
+            # 6. Save to history
+            st.session_state.messages.append({"role": "assistant", "content": ai_text})
+
+            # NO RERUN - This keeps the audio alive!
 
         except Exception as e:
             st.error(f"Connection error: {e}")
