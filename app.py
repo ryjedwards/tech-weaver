@@ -16,21 +16,19 @@ st.markdown("""
     /* 2. THE FIX: Centered Floating Audio */
     div[data-testid="stAudioInput"] {
         position: fixed;
-        bottom: 80px; /* Sits above the text box */
-        left: 50%;    /* Move to the middle of the screen */
-        transform: translateX(-50%); /* Shift back to center perfectly */
-        
-        width: 90%;   /* Take up most of the screen on phones */
-        max-width: 600px; /* Stop growing on big screens */
-        
-        z-index: 9999; /* Always on top */
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 600px;
+        z-index: 9999;
         background-color: transparent;
         border: none;
     }
     
     /* Make the internal box look like a pill/button */
     div[data-testid="stAudioInput"] > div {
-        background-color: #262730; /* Dark grey background */
+        background-color: #262730;
         border-radius: 20px;
         border: 1px solid #444;
         padding: 5px;
@@ -39,7 +37,7 @@ st.markdown("""
     /* Hide Label */
     div[data-testid="stAudioInput"] label { display: none; }
     
-    /* 3. Add massive padding to bottom of chat so messages don't hide behind the mic */
+    /* 3. Padding for bottom of chat */
     div[data-testid="stVerticalBlock"] {
         padding-bottom: 150px;
     }
@@ -48,7 +46,6 @@ st.markdown("""
 
 # --- KEY MANAGEMENT ---
 if "GOOGLE_API_KEY" in st.secrets:
-    # THIS LINE MUST BE INDENTED 4 SPACES
     api_key = st.secrets["GOOGLE_API_KEY"]
 else:
     with st.sidebar:
@@ -58,4 +55,105 @@ else:
 SYSTEM_PROMPT = """
 You are a helpful, patient family friend helping an older relative with tech.
 RULES:
-1. G
+1. GREETINGS: If user says "Hello", just say "Hello" back.
+2. VALIDATE: Empathize.
+3. CHECKLIST: End with "✅ Steps to Try:".
+4. TONE: Warm, respectful, NO JARGON.
+"""
+
+# --- MAIN APP LOGIC ---
+st.title("🤝 Tech Helper")
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("Controls")
+    if st.button("🔄 Start Over"):
+        st.session_state.messages = []
+        st.session_state.last_audio = None
+        st.rerun()
+
+if not api_key:
+    st.warning("Sleeping... (Missing API Key)")
+    st.stop()
+
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=SYSTEM_PROMPT)
+
+# --- SESSION STATE ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "last_audio" not in st.session_state:
+    st.session_state.last_audio = None
+
+# --- WELCOME MAT ---
+welcome_placeholder = st.empty()
+if len(st.session_state.messages) == 0:
+    with welcome_placeholder.container():
+        st.markdown("""
+        <div style="text-align: center; padding-top: 50px;">
+            <h1>👋 Hi there!</h1>
+            <p style="font-size: 24px;">Tap the <b>Microphone</b> below to speak.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+# --- HISTORY ---
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Spacer at the bottom
+st.markdown("<div style='height: 200px;'></div>", unsafe_allow_html=True)
+
+# --- INPUTS ---
+audio_value = st.audio_input("Voice Input")
+text_value = st.chat_input("Type here...")
+
+# --- PROCESSING ---
+user_message = None
+is_audio = False
+
+if audio_value and audio_value != st.session_state.last_audio:
+    user_message = audio_value
+    is_audio = True
+    st.session_state.last_audio = audio_value
+elif text_value:
+    user_message = text_value
+    is_audio = False
+
+if user_message:
+    welcome_placeholder.empty()
+
+    if not is_audio:
+        st.session_state.messages.append({"role": "user", "content": user_message})
+        with st.chat_message("user"):
+            st.markdown(user_message)
+    else:
+        st.session_state.messages.append({"role": "user", "content": "🎤 *Voice Message Sent*"})
+        with st.chat_message("user"):
+            st.markdown("🎤 *Voice Message Sent*")
+
+    with st.spinner("Thinking..."):
+        try:
+            if is_audio:
+                audio_bytes = user_message.read()
+                response = model.generate_content([
+                    "If greeting, return greeting. Else help. End with checklist.",
+                    {"mime_type": "audio/wav", "data": audio_bytes}
+                ])
+            else:
+                response = model.generate_content(user_message)
+            
+            ai_text = response.text
+            
+            st.session_state.messages.append({"role": "assistant", "content": ai_text})
+            with st.chat_message("assistant"):
+                st.markdown(ai_text)
+
+            # AUDIO AUTOPLAY
+            sound_file = BytesIO()
+            tts = gTTS(text=ai_text, lang='en', slow=False)
+            tts.write_to_fp(sound_file)
+            st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
+
+        except Exception as e:
+            st.error(f"Connection error: {e}")
