@@ -6,22 +6,22 @@ from io import BytesIO
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Tech Helper", page_icon="🤝")
 
-# --- CSS HACKS (Clean UI & Smart Layout) ---
+# --- CSS HACKS (Layout & UI) ---
 st.markdown("""
     <style>
-    /* 1. HIDE CLUTTER (Streamlit Header & Footer) */
+    /* 1. HIDE CLUTTER */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* 2. BIG FONT for readability */
+    /* 2. BIG FONT */
     div[data-testid="stMarkdownContainer"] p { font-size: 22px !important; line-height: 1.6 !important; }
     div[data-testid="stMarkdownContainer"] li { font-size: 22px !important; margin-bottom: 10px !important; }
     
-    /* 3. CENTERED FLOATING MIC (The "Pill") */
+    /* 3. CENTERED FLOATING MIC (Moved UP to prevent overlap) */
     div[data-testid="stAudioInput"] {
         position: fixed;
-        bottom: 80px;
+        bottom: 120px; /* Increased from 80px to 120px so it clears the text box */
         left: 50%;
         transform: translateX(-50%);
         width: 90%;
@@ -31,19 +31,19 @@ st.markdown("""
         border: none;
     }
     
-    /* Style the internal pill */
+    /* Style the pill */
     div[data-testid="stAudioInput"] > div {
         background-color: #262730;
         border-radius: 30px;
-        border: 2px solid #555; /* Slightly thicker border for visibility */
+        border: 2px solid #555;
         padding: 5px;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.3); /* Shadow to make it pop */
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.4);
     }
 
     /* Hide Label */
     div[data-testid="stAudioInput"] label { display: none; }
     
-    /* 4. Reduce top white space so Welcome Mat sits higher */
+    /* 4. Adjust vertical padding */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 5rem;
@@ -92,34 +92,27 @@ if "messages" not in st.session_state:
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# --- WELCOME MAT (Instructional Card) ---
+# --- WELCOME MAT (Friendly Version) ---
 welcome_placeholder = st.empty()
 
 if len(st.session_state.messages) == 0:
     with welcome_placeholder.container():
-        # We use a colored info box to make it look like a card
         st.info("""
-        ### 👋 **I am listening.**
+        ### 👋 **I am here to help.**
         
-        I can help you fix your **Phone**, **TV**, or **Computer**.
+        Just let me know what's going on with your tech stuff?
         
-        👇 **Tap the Microphone below and say:**
-        
-        * "My printer isn't working."
-        * "I forgot my password."
-        * "How do I make the text bigger?"
+        *Tap the microphone below to tell me, or type it in the box.*
         """)
 
 # --- HISTORY ---
-# logic: Only show history if there IS history
 if len(st.session_state.messages) > 0:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # Spacer: ONLY add this if we have messages. 
-    # This prevents the "Scroll on Load" issue.
-    st.markdown("<div style='height: 180px;'></div>", unsafe_allow_html=True)
+    # Spacer to prevent hiding behind the floating mic
+    st.markdown("<div style='height: 220px;'></div>", unsafe_allow_html=True)
 
 # --- INPUTS ---
 audio_value = st.audio_input("Voice Input")
@@ -172,7 +165,7 @@ if user_message:
             tts.write_to_fp(sound_file)
             st.audio(sound_file, format='audio/mp3', start_time=0, autoplay=True)
             
-            # Force rerun to update the layout (add spacer)
+            # Force rerun to clear Welcome Mat and update layout
             st.rerun()
 
         except Exception as e:
